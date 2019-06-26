@@ -64,7 +64,7 @@ object Retry {
           zero    = (Status.empty(now), strategy.decide)
           result <- zero.tailRecM[F, A] { case (status, decide) =>
             fa.redeemWith[Either[S, A], E](
-              error => retry[A](status, decide, error),
+              error => retry[A](status.raiseError(error), decide, error),
               result => result.asRight[(Status, Decide)].pure[F])
           }
         } yield result
@@ -200,13 +200,32 @@ object Retry {
 
       Strategy(recur(strategy.decide))
     }
+
+    def giveUpOn(strategy: Strategy, errorFilter: Any => Boolean): Strategy = {
+
+      def recur(decide: Decide): Decide = new Decide {
+
+        def apply(status: Status, now: Instant) = {
+          val result = status.error.fold(decide(status, now)) { error =>
+            if (errorFilter(error)) StrategyDecision.giveUp else decide(status, now)
+          }
+          result.mapDecide(recur)
+        }
+      }
+
+      Strategy(recur(strategy.decide))
+    }
   }
 
 
-  final case class Status(retries: Int, delay: FiniteDuration, last: Instant) { self =>
+  final case class Status(retries: Int, delay: FiniteDuration, last: Instant, error: Option[Any] = none) { self =>
 
     def plus(delay: FiniteDuration): Status = {
-      copy(retries = retries + 1, delay = self.delay + delay)
+      copy(retries = retries + 1, delay = self.delay + delay, error = none)
+    }
+
+    def raiseError[E](e: E): Status = {
+      copy(error = e.some)
     }
   }
 
@@ -279,6 +298,8 @@ object Retry {
     def limit(max: FiniteDuration): Strategy = Strategy.limit(self, max)
 
     def resetAfter(cooldown: FiniteDuration): Strategy = Strategy.resetAfter(self, cooldown)
+
+    def giveUpOn(errorFilter: Any => Boolean): Strategy = Strategy.giveUpOn(self, errorFilter)
   }
 }
 

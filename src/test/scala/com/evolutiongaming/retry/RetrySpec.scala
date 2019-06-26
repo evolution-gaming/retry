@@ -141,6 +141,25 @@ class RetrySpec extends FunSuite with Matchers {
         5.millis))
     actual shouldEqual expected
   }
+
+  test("giveUpOn") {
+    val strategy = Strategy.const(1.millis).giveUpOn {
+      case _: Error => true
+      case _        => false
+    }
+    val call = StateT { _.call }
+    val result = Retry(strategy, onError).apply(call)
+
+    val initial = State(toRetry = 2)
+    val actual = result.run(initial).map(_._1)
+    val expected = State(
+      toRetry = 1,
+      decisions = List(Details(decision = Decision.giveUp, retries = 0)),
+      delays = Nil
+    )
+    actual shouldEqual expected
+  }
+
 }
 
 object RetrySpec {
