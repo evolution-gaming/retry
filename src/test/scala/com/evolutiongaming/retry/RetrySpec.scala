@@ -9,7 +9,6 @@ import com.evolutiongaming.retry.Retry._
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.annotation.tailrec
-import scala.compat.Platform
 import scala.concurrent.duration._
 
 class RetrySpec extends FunSuite with Matchers {
@@ -51,7 +50,7 @@ class RetrySpec extends FunSuite with Matchers {
   }
 
   test("fullJitter") {
-    val rng = Random.State(12345l)
+    val rng = Random.State(12345L)
     val policy = Strategy.fullJitter(5.millis, rng).cap(200.millis)
 
     val call = StateT { _.call }
@@ -212,7 +211,7 @@ object RetrySpec {
 
     implicit val TimerStateT: Timer[StateT] = new Timer[StateT] {
 
-      val clock = Clock.const[StateT](nanos = 0, millis = Platform.currentTime)
+      val clock = Clock.const[StateT](nanos = 0, millis = System.currentTimeMillis())
 
       def sleep(duration: FiniteDuration) = {
         StateT { s => (s.sleep(duration), ().asRight) }
