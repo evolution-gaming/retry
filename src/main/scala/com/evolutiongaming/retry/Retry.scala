@@ -21,6 +21,11 @@ object Retry {
   def apply[F[_]](implicit F: Retry[F]): Retry[F] = F
 
 
+  def empty[F[_]]: Retry[F] = new Retry[F] {
+    def apply[A](fa: F[A]) = fa
+  }
+
+
   def apply[F[_] : Timer, E](
     strategy: Strategy,
     onError: OnError[F, E])(implicit
@@ -79,11 +84,6 @@ object Retry {
     bracket: Bracket[F, E]
   ): Retry[F] = {
     apply(strategy, OnError.empty[F, E])
-  }
-
-
-  def empty[F[_]]: Retry[F] = new Retry[F] {
-    def apply[A](fa: F[A]) = fa
   }
 
 
