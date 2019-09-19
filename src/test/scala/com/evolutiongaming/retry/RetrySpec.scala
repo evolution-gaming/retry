@@ -2,7 +2,7 @@ package com.evolutiongaming.retry
 
 import cats._
 import cats.arrow.FunctionK
-import cats.effect.{Bracket, Clock, ExitCase, Timer}
+import cats.effect.{Clock, Timer}
 import cats.implicits._
 import com.evolutiongaming.catshelper.ClockHelper._
 import com.evolutiongaming.random.Random
@@ -161,7 +161,7 @@ object RetrySpec {
 
   object StateT {
 
-    implicit val BracketImpl: Bracket[StateT, Error] = new Bracket[StateT, Error] {
+    implicit val MonadErrorStateT: MonadError[StateT, Error] = new MonadError[StateT, Error] {
 
       def flatMap[A, B](fa: StateT[A])(f: A => StateT[B]) = {
         StateT[B] { s =>
@@ -183,20 +183,6 @@ object RetrySpec {
         }
 
         StateT { s => apply(s, a) }
-      }
-
-      def bracketCase[A, B](acquire: StateT[A])(use: A => StateT[B])(release: (A, ExitCase[Error]) => StateT[Error]) = {
-        StateT { s =>
-          val (s1, a) = acquire.run(s)
-          a match {
-            case Left(a)  => (s1, a.asLeft[B])
-            case Right(a) =>
-              val (s2, b) = use(a).run(s1)
-              val exitCase = b.fold(ExitCase.error, _ => ExitCase.complete)
-              val(s3, _) = release(a, exitCase).run(s2)
-              (s3, b)
-          }
-        }
       }
 
       def raiseError[A](e: Error) = {

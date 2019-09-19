@@ -3,11 +3,11 @@ package com.evolutiongaming.retry
 import java.time.Instant
 
 import cats.arrow.FunctionK
-import cats.effect.{Bracket, Clock, Timer}
+import cats.effect.{Clock, Timer}
 import cats.implicits._
-import cats.~>
+import cats.{MonadError, ~>}
 import com.evolutiongaming.catshelper.ClockHelper._
-import com.evolutiongaming.catshelper.EffectHelper._
+import com.evolutiongaming.catshelper.CatsHelper._
 
 import scala.concurrent.duration._
 
@@ -29,7 +29,7 @@ object Retry {
   def apply[F[_] : Timer, E](
     strategy: Strategy,
     onError: OnError[F, E])(implicit
-    bracket: Bracket[F, E]
+    F: MonadError[F, E]
   ): Retry[F] = {
 
     type S = (Status, Decide)
@@ -70,8 +70,8 @@ object Retry {
           zero    = (Status.empty(now), strategy.decide)
           result <- zero.tailRecM[F, A] { case (status, decide) =>
             fa.redeemWith[Either[S, A], E](
-              error => retry[A](status, decide, error),
-              result => result.asRight[(Status, Decide)].pure[F])
+              a => retry[A](status, decide, a),
+              a => a.asRight[(Status, Decide)].pure[F])
           }
         } yield result
       }
@@ -81,7 +81,7 @@ object Retry {
 
   def apply[F[_] : Timer, E](
     strategy: Strategy)(implicit
-    bracket: Bracket[F, E]
+    F: MonadError[F, E]
   ): Retry[F] = {
     apply(strategy, OnError.empty[F, E])
   }
