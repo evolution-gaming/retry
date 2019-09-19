@@ -117,4 +117,14 @@ object Strategy {
 
     Strategy(recur(strategy.decide))
   }
+
+
+  implicit class StrategyOps(val self: Strategy) extends AnyVal {
+
+    def cap(max: FiniteDuration): Strategy = Strategy.cap(self, max)
+
+    def limit(max: FiniteDuration): Strategy = Strategy.limit(self, max)
+
+    def resetAfter(cooldown: FiniteDuration): Strategy = Strategy.resetAfter(self, cooldown)
+  }
 }
