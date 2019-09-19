@@ -2,6 +2,7 @@ package com.evolutiongaming.retry
 
 import cats.Applicative
 import cats.implicits._
+import com.evolutiongaming.catshelper.Log
 import com.evolutiongaming.retry.{Decision => StrategyDecision}
 
 import scala.concurrent.duration.FiniteDuration
@@ -14,6 +15,22 @@ trait OnError[F[_], A] {
 object OnError {
 
   def empty[F[_] : Applicative, A]: OnError[F, A] = (_, _, _) => ().pure[F]
+
+
+  def fromLog[F[_]](log: Log[F]): OnError[F, Throwable] = {
+    (error: Throwable, status: Retry.Status, decision: Decision) => {
+
+      decision match {
+        case OnError.Decision.Retry(delay) =>
+          log.warn(s"failed, retrying in $delay, error: $error")
+
+        case OnError.Decision.GiveUp =>
+          val retries = status.retries
+          val duration = status.delay
+          log.error(s"failed, retried $retries times within $duration, error: $error", error)
+      }
+    }
+  }
 
 
   sealed abstract class Decision extends Product
