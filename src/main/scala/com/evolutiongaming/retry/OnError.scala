@@ -27,7 +27,7 @@ object OnError {
         case OnError.Decision.GiveUp =>
           val retries = status.retries
           val duration = status.delay
-          log.error(s"failed, retried $retries times within $duration, error: $error", error)
+          log.error(s"failed after $retries retries within $duration: $error", error)
       }
     }
   }
