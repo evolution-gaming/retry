@@ -1,6 +1,7 @@
 package com.evolutiongaming.retry
 
 import cats._
+import cats.arrow.FunctionK
 import cats.effect.{Bracket, Clock, ExitCase, Timer}
 import cats.implicits._
 import com.evolutiongaming.catshelper.ClockHelper._
@@ -19,22 +20,22 @@ class RetrySpec extends FunSuite with Matchers {
     val strategy = Strategy.fibonacci(5.millis).cap(200.millis)
 
     val call = StateT { _.call }
-    val result = Retry(strategy, onError).apply(call)
+    val result = Retry(strategy, onError).mapK(FunctionK.id, FunctionK.id).apply(call)
 
     val initial = State(toRetry = 10)
     val actual = result.run(initial).map(_._1)
     val expected = State(
-      decisions = List(
-        Details(decision = Decision.retry(200.millis), retries = 9),
-        Details(decision = Decision.retry(170.millis), retries = 8),
-        Details(decision = Decision.retry(105.millis), retries = 7),
-        Details(decision = Decision.retry(65.millis), retries = 6),
-        Details(decision = Decision.retry(40.millis), retries = 5),
-        Details(decision = Decision.retry(25.millis), retries = 4),
-        Details(decision = Decision.retry(15.millis), retries = 3),
-        Details(decision = Decision.retry(10.millis), retries = 2),
-        Details(decision = Decision.retry(5.millis), retries = 1),
-        Details(decision = Decision.retry(5.millis), retries = 0)),
+      records = List(
+        Record.retry(delay = 200.millis, retries = 9),
+        Record.retry(delay = 170.millis, retries = 8),
+        Record.retry(delay = 105.millis, retries = 7),
+        Record.retry(delay = 65.millis, retries = 6),
+        Record.retry(delay = 40.millis, retries = 5),
+        Record.retry(delay = 25.millis, retries = 4),
+        Record.retry(delay = 15.millis, retries = 3),
+        Record.retry(delay = 10.millis, retries = 2),
+        Record.retry(delay = 5.millis, retries = 1),
+        Record.retry(delay = 5.millis, retries = 0)),
       delays = List(
         200.millis,
         170.millis,
@@ -59,14 +60,14 @@ class RetrySpec extends FunSuite with Matchers {
     val initial = State(toRetry = 7)
     val actual = result.run(initial).map(_._1)
     val expected = State(
-      decisions = List(
-        Details(decision = Decision.retry(200.millis), retries = 6),
-        Details(decision = Decision.retry(133.millis), retries = 5),
-        Details(decision = Decision.retry(34.millis), retries = 4),
-        Details(decision = Decision.retry(79.millis), retries = 3),
-        Details(decision = Decision.retry(26.millis), retries = 2),
-        Details(decision = Decision.retry(15.millis), retries = 1),
-        Details(decision = Decision.retry(5.millis), retries = 0)),
+      records = List(
+        Record.retry(delay = 200.millis, retries = 6),
+        Record.retry(delay = 133.millis, retries = 5),
+        Record.retry(delay = 34.millis, retries = 4),
+        Record.retry(delay = 79.millis, retries = 3),
+        Record.retry(delay = 26.millis, retries = 2),
+        Record.retry(delay = 15.millis, retries = 1),
+        Record.retry(delay = 5.millis, retries = 0)),
       delays = List(
         200.millis,
         133.millis,
@@ -87,12 +88,12 @@ class RetrySpec extends FunSuite with Matchers {
     val actual = result.run(initial).map(_._1)
     val expected = State(
       toRetry = 1,
-      decisions = List(
-        Details(decision = Decision.giveUp, retries = 4),
-        Details(decision = Decision.retry(1.millis), retries = 3),
-        Details(decision = Decision.retry(1.millis), retries = 2),
-        Details(decision = Decision.retry(1.millis), retries = 1),
-        Details(decision = Decision.retry(1.millis), retries = 0)),
+      records = List(
+        Record(decision = OnError.Decision.giveUp, retries = 4),
+        Record.retry(delay = 1.millis, retries = 3),
+        Record.retry(delay = 1.millis, retries = 2),
+        Record.retry(delay = 1.millis, retries = 1),
+        Record.retry(delay = 1.millis, retries = 0)),
       delays = List(
         1.millis,
         1.millis,
@@ -110,10 +111,10 @@ class RetrySpec extends FunSuite with Matchers {
     val initial = State(toRetry = 3)
     val actual = result.run(initial).map(_._1)
     val expected = State(
-      decisions = List(
-        Details(decision = Decision.retry(5.millis), retries = 0),
-        Details(decision = Decision.retry(5.millis), retries = 0),
-        Details(decision = Decision.retry(5.millis), retries = 0)),
+      records = List(
+        Record.retry(delay = 5.millis, retries = 0),
+        Record.retry(delay = 5.millis, retries = 0),
+        Record.retry(delay = 5.millis, retries = 0)),
       delays = List(
         5.millis,
         5.millis,
@@ -130,10 +131,10 @@ class RetrySpec extends FunSuite with Matchers {
     val initial = State(toRetry = 3)
     val actual = result.run(initial).map(_._1)
     val expected = State(
-      decisions = List(
-        Details(decision = Decision.retry(10.millis), retries = 2),
-        Details(decision = Decision.retry(5.millis), retries = 1),
-        Details(decision = Decision.retry(5.millis), retries = 0)),
+      records = List(
+        Record.retry(delay = 10.millis, retries = 2),
+        Record.retry(delay = 5.millis, retries = 1),
+        Record.retry(delay = 5.millis, retries = 0)),
       delays = List(
         10.millis,
         5.millis,
@@ -148,8 +149,12 @@ object RetrySpec {
 
   type FE[A] = Either[Error, A]
 
-  val onError: (Error, Details) => StateT[Error] = (_: Error, details: Details) => {
-    StateT { s => (s.onError(details), ().asRight) }
+  val onError: OnError[StateT, Error] = (_, status: Retry.Status, decision: OnError.Decision) => {
+    StateT { state =>
+      val details = Record(decision, status.retries)
+      val state1 = state.copy(records = details :: state.records)
+      (state1, ().asRight)
+    }
   }
 
   type StateT[A] = cats.data.StateT[Id, State, FE[A]]
@@ -226,7 +231,7 @@ object RetrySpec {
 
   final case class State(
     toRetry: Int = 0,
-    decisions: List[Details] = Nil,
+    records: List[Record] = Nil,
     delays: List[FiniteDuration] = Nil
   ) { self =>
 
@@ -241,7 +246,16 @@ object RetrySpec {
         (self, ().asRight)
       }
     }
+  }
 
-    def onError(details: Details): State = copy(decisions = details :: self.decisions)
+
+  final case class Record(decision: OnError.Decision, retries: Int)
+
+  object Record {
+    
+    def retry(delay: FiniteDuration, retries: Int): Record = {
+      val decision = OnError.Decision.retry(delay)
+      Record(decision, retries)
+    }
   }
 }
