@@ -7,12 +7,13 @@ import cats.implicits._
 import com.evolutiongaming.catshelper.ClockHelper._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
-import org.scalatest.{FunSuite, Matchers}
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers
 
-class RetrySpec extends FunSuite with Matchers {
+class RetrySpec extends AnyFunSuite with Matchers {
   import RetrySpec.StateT._
   import RetrySpec._
 
