@@ -58,7 +58,7 @@ object Strategy {
     Strategy(recur(random))
   }
 
-
+  /** Caps the maximum delay between retries to a specific value. */
   def cap(strategy: Strategy, max: FiniteDuration): Strategy = {
 
     def recur(decide: Decide): Decide = new Decide {
@@ -77,6 +77,11 @@ object Strategy {
   }
 
 
+  /** Limits the maximum time of the task to a specific value.
+    *
+    * The startegy will not schedule a new retry if expected duration
+    * will exceed the `max` value.
+    */
   def limit(strategy: Strategy, max: FiniteDuration): Strategy = {
 
     def recur(decide: Decide): Decide = new Decide {
