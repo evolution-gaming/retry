@@ -7,11 +7,11 @@ import cats.implicits._
 import com.evolutiongaming.catshelper.ClockHelper._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
-
-import scala.annotation.tailrec
-import scala.concurrent.duration._
+import java.time.Instant
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
+import scala.annotation.tailrec
+import scala.concurrent.duration._
 
 class RetrySpec extends AnyFunSuite with Matchers {
   import RetrySpec.StateT._
@@ -103,6 +103,34 @@ class RetrySpec extends AnyFunSuite with Matchers {
     actual shouldEqual expected
   }
 
+  test("until") {
+    val strategy =
+      Strategy
+      .const(1.millis)
+      .limit(4.millis)
+      .until(Instant.ofEpochMilli(StateT.InitialTime + 4))
+
+    val call = StateT { _.call }
+    val result = Retry(strategy, onError).apply(call)
+
+    val initial = State(toRetry = 6)
+    val actual = result.run(initial).map(_._1)
+    val expected = State(
+      toRetry = 1,
+      records = List(
+        Record(decision = OnError.Decision.giveUp, retries = 4),
+        Record.retry(delay = 1.millis, retries = 3),
+        Record.retry(delay = 1.millis, retries = 2),
+        Record.retry(delay = 1.millis, retries = 1),
+        Record.retry(delay = 1.millis, retries = 0)),
+      delays = List(
+        1.millis,
+        1.millis,
+        1.millis,
+        1.millis))
+    actual shouldEqual expected
+  }
+
   test("resetAfter 0.millis") {
     val strategy = Strategy.fibonacci(5.millis).resetAfter(0.millis)
 
@@ -162,6 +190,8 @@ object RetrySpec {
 
   object StateT {
 
+    val InitialTime = System.currentTimeMillis()
+
     implicit val MonadErrorStateT: MonadError[StateT, Error] = new MonadError[StateT, Error] {
 
       def flatMap[A, B](fa: StateT[A])(f: A => StateT[B]) = {
@@ -203,7 +233,15 @@ object RetrySpec {
 
     implicit val TimerStateT: Timer[StateT] = new Timer[StateT] {
 
-      val clock = Clock.const[StateT](nanos = 0, millis = System.currentTimeMillis())
+      val clock = new Clock[StateT] {
+
+        def realTime(unit: TimeUnit) = StateT { s =>
+          val delay = s.delays.map(_.toMillis).sum
+          (s, (InitialTime + delay).asRight)
+        }
+        def monotonic(unit: TimeUnit) = StateT { s => (s, 0L.asRight) }
+
+      }
 
       def sleep(duration: FiniteDuration) = {
         StateT { s => (s.sleep(duration), ().asRight) }
@@ -239,7 +277,7 @@ object RetrySpec {
   final case class Record(decision: OnError.Decision, retries: Int)
 
   object Record {
-    
+
     def retry(delay: FiniteDuration, retries: Int): Record = {
       val decision = OnError.Decision.retry(delay)
       Record(decision, retries)
