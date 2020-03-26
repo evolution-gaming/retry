@@ -100,6 +100,29 @@ object Strategy {
   }
 
 
+  /** Performs the task up until `end`.
+    *
+    * The deadline is not inclusive, i.e. it will not perform the task at,
+    * exactly, the instant passed as a parameter.
+    */
+  def until(strategy: Strategy, end: Instant): Strategy = {
+
+    def recur(decide: Decide): Decide = new Decide {
+
+      def apply(status: Status, now: Instant) = {
+        decide(status, now) match {
+          case Decision.GiveUp                       => Decision.giveUp
+          case Decision.Retry(delay, status, decide) =>
+            if (now.compareTo(end) >= 0) Decision.giveUp
+            else Decision.retry(delay, status, recur(decide))
+        }
+      }
+    }
+
+    Strategy(recur(strategy.decide))
+  }
+
+
   def resetAfter(strategy: Strategy, cooldown: FiniteDuration): Strategy = {
 
     def recur(decide: Decide): Decide = new Decide {
@@ -129,6 +152,8 @@ object Strategy {
     def cap(max: FiniteDuration): Strategy = Strategy.cap(self, max)
 
     def limit(max: FiniteDuration): Strategy = Strategy.limit(self, max)
+
+    def until(end: Instant): Strategy = Strategy.until(self, end)
 
     def resetAfter(cooldown: FiniteDuration): Strategy = Strategy.resetAfter(self, cooldown)
   }
