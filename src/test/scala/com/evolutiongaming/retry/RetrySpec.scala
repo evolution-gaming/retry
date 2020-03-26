@@ -4,7 +4,6 @@ import cats._
 import cats.arrow.FunctionK
 import cats.effect.{Clock, Timer}
 import cats.implicits._
-import com.evolutiongaming.catshelper.ClockHelper._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
 import java.time.Instant
