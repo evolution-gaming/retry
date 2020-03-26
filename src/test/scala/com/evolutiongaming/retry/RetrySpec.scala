@@ -108,24 +108,20 @@ class RetrySpec extends AnyFunSuite with Matchers {
       Strategy
       .const(1.millis)
       .limit(4.millis)
-      .until(Instant.ofEpochMilli(StateT.InitialTime + 4))
+      .until(Instant.ofEpochMilli(StateT.InitialTime + 2))
 
     val call = StateT { _.call }
     val result = Retry(strategy, onError).apply(call)
 
-    val initial = State(toRetry = 6)
+    val initial = State(toRetry = 4)
     val actual = result.run(initial).map(_._1)
     val expected = State(
       toRetry = 1,
       records = List(
-        Record(decision = OnError.Decision.giveUp, retries = 4),
-        Record.retry(delay = 1.millis, retries = 3),
-        Record.retry(delay = 1.millis, retries = 2),
+        Record(decision = OnError.Decision.giveUp, retries = 2),
         Record.retry(delay = 1.millis, retries = 1),
         Record.retry(delay = 1.millis, retries = 0)),
       delays = List(
-        1.millis,
-        1.millis,
         1.millis,
         1.millis))
     actual shouldEqual expected
