@@ -16,5 +16,5 @@ retry(request)
 ```scala
 resolvers += Resolver.bintrayRepo("evolutiongaming", "maven")
 
-libraryDependencies += "com.evolutiongaming" %% "retry" % "0.0.1"
+libraryDependencies += "com.evolutiongaming" %% "retry" % "1.0.3"
 ```
