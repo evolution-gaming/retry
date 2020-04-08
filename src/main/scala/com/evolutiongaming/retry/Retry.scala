@@ -7,7 +7,6 @@ import cats.effect.{Clock, Timer}
 import cats.implicits._
 import cats.{MonadError, ~>}
 import com.evolutiongaming.catshelper.ClockHelper._
-import com.evolutiongaming.catshelper.CatsHelper._
 
 import scala.concurrent.duration._
 
@@ -69,7 +68,7 @@ object Retry {
           now    <- Clock[F].instant
           zero    = (Status.empty(now), strategy.decide)
           result <- zero.tailRecM[F, A] { case (status, decide) =>
-            fa.redeemWith[Either[S, A], E](
+            fa.redeemWith[Either[S, A]](
               a => retry[A](status, decide, a),
               a => a.asRight[(Status, Decide)].pure[F])
           }
