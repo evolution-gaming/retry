@@ -7,6 +7,7 @@ import cats.effect.{Clock, Timer}
 import cats.implicits._
 import cats.{MonadError, ~>}
 import com.evolutiongaming.catshelper.ClockHelper._
+import com.evolutiongaming.catshelper.{Log, MonadThrowable}
 
 import scala.concurrent.duration._
 
@@ -112,6 +113,41 @@ object Retry {
 
   object Status {
     def empty(last: Instant): Status = Status(0, Duration.Zero, last)
+  }
+
+
+  object implicits {
+
+    implicit class OpsRetry[F[_], A](val self: F[A]) extends AnyVal {
+
+      def retry(implicit retry: Retry[F]): F[A] = retry(self)
+
+      def retry[E](
+        strategy: Strategy,
+        onError: OnError[F, E])(implicit
+        F: MonadError[F, E],
+        timer: Timer[F]
+      ): F[A] = {
+        Retry(strategy, onError).apply(self)
+      }
+
+      def retry[E](
+        strategy: Strategy)(implicit
+        F: MonadError[F, E],
+        timer: Timer[F]
+      ): F[A] = {
+        self.retry(strategy, OnError.empty[F, E])
+      }
+
+      def retry(
+        strategy: Strategy,
+        log: Log[F])(implicit
+        F: MonadThrowable[F],
+        timer: Timer[F]
+      ): F[A] = {
+        self.retry(strategy, OnError.fromLog(log))
+      }
+    }
   }
 }
 

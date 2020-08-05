@@ -6,6 +6,7 @@ import cats.effect.{Clock, Timer}
 import cats.implicits._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
+import com.evolutiongaming.retry.Retry.implicits._
 import java.time.Instant
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
@@ -82,7 +83,7 @@ class RetrySpec extends AnyFunSuite with Matchers {
   test("const") {
     val strategy = Strategy.const(1.millis).limit(4.millis)
     val call = StateT { _.call }
-    val result = Retry(strategy, onError).apply(call)
+    val result = call.retry(strategy, onError)
 
     val initial = State(toRetry = 6)
     val actual = result.run(initial).map(_._1)
