@@ -18,7 +18,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
   import RetrySpec._
 
   test("fibonacci") {
-    val strategy = Strategy.fibonacci(5.millis).cap(200.millis)
+    val strategy = Strategy
+      .fibonacci(5.millis)
+      .cap(200.millis)
 
     val call = StateT { _.call }
     val result = Retry(strategy, onError).mapK(FunctionK.id, FunctionK.id).apply(call)
@@ -51,9 +53,12 @@ class RetrySpec extends AnyFunSuite with Matchers {
     actual shouldEqual expected
   }
 
-  test("fullJitter") {
-    val rng = Random.State(12345L)
-    val policy = Strategy.fullJitter(5.millis, rng).cap(200.millis)
+  test("exponential.jitter.cap") {
+    val random = Random.State(12345L)
+    val policy = Strategy
+      .exponential(5.millis)
+      .jitter(random)
+      .cap(200.millis)
 
     val call = StateT { _.call }
     val result = Retry(policy, onError).apply(call)
@@ -63,25 +68,27 @@ class RetrySpec extends AnyFunSuite with Matchers {
     val expected = State(
       records = List(
         Record.retry(delay = 200.millis, retries = 6),
-        Record.retry(delay = 133.millis, retries = 5),
-        Record.retry(delay = 34.millis, retries = 4),
-        Record.retry(delay = 79.millis, retries = 3),
-        Record.retry(delay = 26.millis, retries = 2),
-        Record.retry(delay = 15.millis, retries = 1),
-        Record.retry(delay = 5.millis, retries = 0)),
+        Record.retry(delay = 65600.microseconds, retries = 5),
+        Record.retry(delay = 16800.microseconds, retries = 4),
+        Record.retry(delay = 39600.microseconds, retries = 3),
+        Record.retry(delay = 13200.microseconds, retries = 2),
+        Record.retry(delay = 7900.microseconds, retries = 1),
+        Record.retry(delay = 0.nanoseconds, retries = 0)),
       delays = List(
         200.millis,
-        133.millis,
-        34.millis,
-        79.millis,
-        26.millis,
-        15.millis,
-        5.millis))
+        65600.microseconds,
+        16800.microseconds,
+        39600.microseconds,
+        13200.microseconds,
+        7900.microseconds,
+        0.nanoseconds))
     actual shouldEqual expected
   }
 
   test("const") {
-    val strategy = Strategy.const(1.millis).limit(4.millis)
+    val strategy = Strategy
+      .const(1.millis)
+      .limit(4.millis)
     val call = StateT { _.call }
     val result = call.retry(strategy, onError)
 
@@ -128,7 +135,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
   }
 
   test("resetAfter 0.millis") {
-    val strategy = Strategy.fibonacci(5.millis).resetAfter(0.millis)
+    val strategy = Strategy
+      .fibonacci(5.millis)
+      .resetAfter(0.millis)
 
     val call = StateT { _.call }
     val result = Retry(strategy, onError).apply(call)
@@ -148,7 +157,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
   }
 
   test("resetAfter 1.minute") {
-    val strategy = Strategy.fibonacci(5.millis).resetAfter(1.minute)
+    val strategy = Strategy
+      .fibonacci(5.millis)
+      .resetAfter(1.minute)
 
     val call = StateT { _.call }
     val result = Retry(strategy, onError).apply(call)
@@ -164,6 +175,91 @@ class RetrySpec extends AnyFunSuite with Matchers {
         10.millis,
         5.millis,
         5.millis))
+    actual shouldEqual expected
+  }
+
+  test("exponential") {
+    val strategy = Strategy.exponential(1.millis)
+
+    val call = StateT { _.call }
+    val result = Retry(strategy, onError).apply(call)
+
+    val initial = State(toRetry = 4)
+    val actual = result.run(initial).map(_._1)
+    val expected = State(
+      records = List(
+        Record.retry(delay = 8.millis, retries = 3),
+        Record.retry(delay = 4.millis, retries = 2),
+        Record.retry(delay = 2.millis, retries = 1),
+        Record.retry(delay = 1.millis, retries = 0)),
+      delays = List(
+        8.millis,
+        4.millis,
+        2.millis,
+        1.millis))
+    actual shouldEqual expected
+  }
+
+  test("jitter") {
+    val random = Random.State(12345L)
+    val policy = Strategy
+      .const(1.second)
+      .jitter(random)
+
+    val call = StateT { _.call }
+    val result = Retry(policy, onError).apply(call)
+
+    val initial = State(toRetry = 7)
+    val actual = result.run(initial).map(_._1)
+    val expected = State(
+      records = List(
+        Record.retry(delay = 820.millis, retries = 6),
+        Record.retry(delay = 410.millis, retries = 5),
+        Record.retry(delay = 210.millis, retries = 4),
+        Record.retry(delay = 990.millis, retries = 3),
+        Record.retry(delay = 660.millis, retries = 2),
+        Record.retry(delay = 790.millis, retries = 1),
+        Record.retry(delay = 0.millis, retries = 0)),
+      delays = List(
+        820.millis,
+        410.millis,
+        210.millis,
+        990.millis,
+        660.millis,
+        790.millis,
+        0.millis))
+    actual shouldEqual expected
+  }
+
+
+  test("jitter half") {
+    val random = Random.State(12345L)
+    val policy = Strategy
+      .const(1.second)
+      .jitter(random, 0.5)
+
+    val call = StateT { _.call }
+    val result = Retry(policy, onError).apply(call)
+
+    val initial = State(toRetry = 7)
+    val actual = result.run(initial).map(_._1)
+    val expected = State(
+      records = List(
+        Record.retry(delay = 910.millis, retries = 6),
+        Record.retry(delay = 705.millis, retries = 5),
+        Record.retry(delay = 605.millis, retries = 4),
+        Record.retry(delay = 995.millis, retries = 3),
+        Record.retry(delay = 830.millis, retries = 2),
+        Record.retry(delay = 895.millis, retries = 1),
+        Record.retry(delay = 500.millis, retries = 0)),
+      delays = List(
+        910.millis,
+        705.millis,
+        605.millis,
+        995.millis,
+        830.millis,
+        895.millis,
+        500.millis))
     actual shouldEqual expected
   }
 }

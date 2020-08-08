@@ -32,9 +32,9 @@ object Retry {
     F: MonadError[F, E]
   ): Retry[F] = {
 
-    type S = (Status, Decide)
+    type S = (Status, Strategy)
 
-    def retry[A](status: Status, decide: Decide, error: E): F[Either[S, A]] = {
+    def retry[A](status: Status, strategy: Strategy, error: E): F[Either[S, A]] = {
 
       def onError1(status: Status, decision: Decision) = {
         val decision1 = OnError.Decision(decision)
@@ -43,7 +43,7 @@ object Retry {
 
       for {
         now      <- Clock[F].instant
-        decision  = decide(status, now)
+        decision  = strategy(status, now)
         result   <- decision match {
           case Decision.GiveUp =>
             for {
@@ -67,11 +67,11 @@ object Retry {
       def apply[A](fa: F[A]) = {
         for {
           now    <- Clock[F].instant
-          zero    = (Status.empty(now), strategy.decide)
-          result <- zero.tailRecM[F, A] { case (status, decide) =>
+          zero    = (Status.empty(now), strategy)
+          result <- zero.tailRecM[F, A] { case (status, strategy) =>
             fa.redeemWith[Either[S, A]](
-              a => retry[A](status, decide, a),
-              a => a.asRight[(Status, Decide)].pure[F])
+              a => retry[A](status, strategy, a),
+              a => a.asRight[(Status, Strategy)].pure[F])
           }
         } yield result
       }
@@ -96,11 +96,6 @@ object Retry {
     def toFunctionK: FunctionK[F, F] = new FunctionK[F, F] {
       def apply[A](fa: F[A]) = self(fa)
     }
-  }
-
-
-  trait Decide {
-    def apply(status: Status, now: Instant): Decision
   }
 
 

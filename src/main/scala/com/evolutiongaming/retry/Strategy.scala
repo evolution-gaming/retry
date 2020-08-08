@@ -3,100 +3,105 @@ package com.evolutiongaming.retry
 import java.time.Instant
 
 import com.evolutiongaming.random.Random
-import com.evolutiongaming.retry.Retry.{Decide, Status}
+import com.evolutiongaming.retry.Retry.Status
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 
-final case class Strategy(decide: Decide)
+trait Strategy {
+  def apply(status: Status, now: Instant): Decision
+}
 
 object Strategy {
 
+  def apply(f: (Status, Instant) => Decision): Strategy = (status, now) => f(status, now)
+
   def const(delay: FiniteDuration): Strategy = {
-    def decide: Decide = new Decide {
-      def apply(status: Status, now: Instant) = {
-        Decision.retry(delay, status, decide)
-      }
+
+    def strategy: Strategy = {
+      Strategy { (status, _) => Decision.retry(delay, status, strategy) }
     }
 
-    Strategy(decide)
+    strategy
   }
 
 
   def fibonacci(initial: FiniteDuration): Strategy = {
     val unit = initial.unit
 
-    def recur(a: Long, b: Long): Decide = new Decide {
-
-      def apply(status: Status, now: Instant) = {
+    def loop(a: Long, b: Long): Strategy = Strategy {
+      (status, _) => {
         val delay = FiniteDuration(b, unit)
-        Decision.retry(delay, status, recur(b, a + b))
+        Decision.retry(delay, status, loop(b, a + b))
       }
     }
 
-    Strategy(recur(0, initial.length))
+    loop(0, initial.length)
   }
 
 
-  /**
-    * See https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-    */
-  def fullJitter(initial: FiniteDuration, random: Random.State): Strategy = {
+  def exponential(initial: FiniteDuration): Strategy = {
 
-    def recur(random: Random.State): Decide = new Decide {
-
-      def apply(status: Status, now: Instant) = {
-        val e = math.pow(2.toDouble, status.retries + 1d)
-        val max = initial.length * e
-        val (random1, double) = random.double
-        val delay = (max * double).toLong max initial.length
-        val duration = FiniteDuration(delay, initial.unit)
-        Decision.retry(duration, status, recur(random1))
+    def strategy: Strategy = {
+      (status, _) => {
+        val e = math.pow(2.toDouble, status.retries.toDouble)
+        val length = initial.length * e
+        val duration = FiniteDuration(length.toLong, initial.unit)
+        Decision.retry(duration, status, strategy)
       }
     }
 
-    Strategy(recur(random))
+    strategy
+  }
+
+
+  @deprecated("use `exponential(initial).jitter(random)` instead", "1.1.0")
+  def fullJitter(initial: FiniteDuration, random: Random.State): Strategy = {
+
+    def loop(random: Random.State): Strategy = Strategy {
+      (status, _) =>
+        val e = math.pow(2.toDouble, status.retries.toDouble)
+        val max = initial.length * e
+        val (random1, double) = random.double
+        val delay = (max * double).toLong
+        val duration = FiniteDuration(delay, initial.unit).toCoarsest
+        Decision.retry(duration, status, loop(random1))
+    }
+
+    loop(random)
   }
 
   /** Caps the maximum delay between retries to a specific value. */
   def cap(strategy: Strategy, max: FiniteDuration): Strategy = {
 
-    def recur(decide: Decide): Decide = new Decide {
-
-      def apply(status: Status, now: Instant) = {
-        decide(status, now) match {
-          case Decision.GiveUp                       => Decision.giveUp
-          case Decision.Retry(delay, status, decide) =>
-            if (delay <= max) Decision.retry(delay, status, recur(decide))
-            else Decision.retry(max, status, const(max).decide)
+    def loop(strategy: Strategy): Strategy = Strategy {
+      (status, now) =>
+        strategy(status, now).flatMap { case Decision.Retry(delay, status, strategy) =>
+          if (delay <= max) Decision.retry(delay, status, loop(strategy))
+          else Decision.retry(max, status, const(max))
         }
-      }
     }
 
-    Strategy(recur(strategy.decide))
+    loop(strategy)
   }
 
 
   /** Limits the maximum time of the task to a specific value.
     *
-    * The startegy will not schedule a new retry if expected duration
+    * The strategy will not schedule a new retry if expected duration
     * will exceed the `max` value.
     */
   def limit(strategy: Strategy, max: FiniteDuration): Strategy = {
 
-    def recur(decide: Decide): Decide = new Decide {
-
-      def apply(status: Status, now: Instant) = {
-        decide(status, now) match {
-          case Decision.GiveUp                       => Decision.giveUp
-          case Decision.Retry(delay, status, decide) =>
-            if (status.delay + delay > max) Decision.giveUp
-            else Decision.retry(delay, status, recur(decide))
+    def loop(strategy: Strategy): Strategy = Strategy {
+      (status, now) =>
+        strategy(status, now).flatMap { case Decision.Retry(delay, status, strategy) =>
+          if (status.delay + delay > max) Decision.giveUp
+          else Decision.retry(delay, status, loop(strategy))
         }
-      }
     }
 
-    Strategy(recur(strategy.decide))
+    loop(strategy)
   }
 
 
@@ -107,43 +112,37 @@ object Strategy {
     */
   def until(strategy: Strategy, end: Instant): Strategy = {
 
-    def recur(decide: Decide): Decide = new Decide {
-
-      def apply(status: Status, now: Instant) = {
-        decide(status, now) match {
-          case Decision.GiveUp                       => Decision.giveUp
-          case Decision.Retry(delay, status, decide) =>
-            if (now.compareTo(end) >= 0) Decision.giveUp
-            else Decision.retry(delay, status, recur(decide))
+    def loop(strategy: Strategy): Strategy = Strategy {
+      (status, now) =>
+        strategy(status, now).flatMap { case Decision.Retry(delay, status, strategy) =>
+          if (now.compareTo(end) >= 0) Decision.giveUp
+          else Decision.retry(delay, status, loop(strategy))
         }
-      }
     }
 
-    Strategy(recur(strategy.decide))
+    loop(strategy)
   }
 
 
   def resetAfter(strategy: Strategy, cooldown: FiniteDuration): Strategy = {
 
-    def recur(decide: Decide): Decide = new Decide {
-
-      def apply(status: Status, now: Instant) = {
+    def loop(strategy1: Strategy): Strategy = Strategy {
+      (status, now) =>
 
         val reset = status.last.toEpochMilli + cooldown.toMillis <= now.toEpochMilli
 
         val result = {
           if (reset) {
             val status = Status.empty(now)
-            strategy.decide(status, now)
+            strategy(status, now)
           } else {
-            decide(status, now)
+            strategy1(status, now)
           }
         }
-        result.mapDecide(recur)
-      }
+        result.mapStrategy(loop)
     }
 
-    Strategy(recur(strategy.decide))
+    loop(strategy)
   }
 
 
@@ -156,5 +155,33 @@ object Strategy {
     def until(end: Instant): Strategy = Strategy.until(self, end)
 
     def resetAfter(cooldown: FiniteDuration): Strategy = Strategy.resetAfter(self, cooldown)
+
+    /**
+      * delay1 = delay * fraction
+      * delay1 * random + delay - delay1
+      * See https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+      */
+    def jitter(random: Random.State, fraction: Double = 1.0): Strategy = {
+
+      val fraction1 = fraction min 1.0 max 0.0
+
+      def loop(strategy: Strategy, random: Random.State): Strategy = {
+        (status, now) => {
+          strategy(status, now).flatMap { case Decision.Retry(delay, status, strategy) =>
+            val (random1, multiplier) = random.double
+            val multiplier1 = (multiplier * 100).floor / 100
+            val nanos = delay.toNanos
+            val nanos1 = nanos * fraction1
+            val delay1 = (nanos1 * multiplier1 + nanos - nanos1)
+              .toLong
+              .nanos
+              .toCoarsest
+            Decision.Retry(delay1, status, loop(strategy, random1))
+          }
+        }
+      }
+
+      loop(self, random)
+    }
   }
 }
