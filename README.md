@@ -7,12 +7,15 @@
  
 ```scala
 import com.evolutiongaming.retry._
+import com.evolutiongaming.retry.Retry.implicits._
 
-val request: IO[String] = ???
+val request: F[String] = ???
 
-val strategy = Strategy.fibonacci(5.millis).cap(200.millis)
-val retry = Retry[IO](strategy)
-retry(request)
+val strategy = Strategy
+  .fibonacci(5.millis)
+  .cap(200.millis)
+
+request.retry(strategy)
 
 ``` 
 
@@ -21,5 +24,5 @@ retry(request)
 ```scala
 resolvers += Resolver.bintrayRepo("evolutiongaming", "maven")
 
-libraryDependencies += "com.evolutiongaming" %% "retry" % "1.0.3"
+libraryDependencies += "com.evolutiongaming" %% "retry" % "2.0.0"
 ```
