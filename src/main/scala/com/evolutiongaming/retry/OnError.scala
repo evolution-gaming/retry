@@ -1,7 +1,7 @@
 package com.evolutiongaming.retry
 
 import cats.Applicative
-import cats.implicits._
+import cats.syntax.all._
 import com.evolutiongaming.catshelper.Log
 import com.evolutiongaming.retry.{Decision => StrategyDecision}
 

@@ -4,7 +4,7 @@ import java.time.Instant
 
 import cats.arrow.FunctionK
 import cats.effect.{Clock, Timer}
-import cats.implicits._
+import cats.syntax.all._
 import cats.{MonadError, ~>}
 import com.evolutiongaming.catshelper.ClockHelper._
 import com.evolutiongaming.catshelper.{Log, MonadThrowable}

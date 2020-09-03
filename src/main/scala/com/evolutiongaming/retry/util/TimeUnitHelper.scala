@@ -1,6 +1,6 @@
 package com.evolutiongaming.retry.util
 
-import cats.implicits._
+import cats.syntax.all._
 
 import scala.concurrent.duration._
 
