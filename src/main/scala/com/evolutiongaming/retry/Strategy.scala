@@ -124,6 +124,21 @@ object Strategy {
   }
 
 
+  /** Performs up to `max` retry attempts */
+  def attempts(strategy: Strategy, max: Int): Strategy = {
+
+    def loop(strategy: Strategy): Strategy = Strategy {
+      (status, now) =>
+        strategy(status, now).flatMap { case Decision.Retry(delay, status, strategy) =>
+          if (status.retries == max) Decision.giveUp
+          else Decision.retry(delay, status, loop(strategy))
+        }
+    }
+
+    loop(strategy)
+  }
+
+
   def resetAfter(strategy: Strategy, cooldown: FiniteDuration): Strategy = {
 
     def loop(strategy1: Strategy): Strategy = Strategy {
@@ -153,6 +168,8 @@ object Strategy {
     def limit(max: FiniteDuration): Strategy = Strategy.limit(self, max)
 
     def until(end: Instant): Strategy = Strategy.until(self, end)
+
+    def attempts(max: Int): Strategy = Strategy.attempts(self, max)
 
     def resetAfter(cooldown: FiniteDuration): Strategy = Strategy.resetAfter(self, cooldown)
 
