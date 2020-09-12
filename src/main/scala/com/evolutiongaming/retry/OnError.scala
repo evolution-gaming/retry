@@ -17,6 +17,15 @@ object OnError {
   def empty[F[_] : Applicative, A]: OnError[F, A] = (_, _, _) => ().pure[F]
 
 
+  def apply[F[_] : Applicative](f: Throwable => F[Unit]): OnError[F, Throwable] = {
+    (error: Throwable, _: Retry.Status, decision: Decision) =>
+      decision match {
+        case OnError.Decision.Retry(_) => f(error)
+        case OnError.Decision.GiveUp   => ().pure[F]
+      }
+  }
+
+
   def fromLog[F[_]](log: Log[F]): OnError[F, Throwable] = {
     (error: Throwable, status: Retry.Status, decision: Decision) => {
 
