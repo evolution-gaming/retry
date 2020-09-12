@@ -53,6 +53,29 @@ class RetrySpec extends AnyFunSuite with Matchers {
     actual shouldEqual expected
   }
 
+  test("attempts") {
+    val strategy = Strategy
+      .const(10.millis)
+      .attempts(3)
+
+    val call = StateT { _.call }
+    val result = Retry(strategy, onError).mapK(FunctionK.id, FunctionK.id).apply(call)
+
+    val initial = State(toRetry = 4)
+    val actual = result.run(initial).map(_._1)
+    val expected = State(
+      records = List(
+        Record(decision = OnError.Decision.giveUp, retries = 3),
+        Record.retry(delay = 10.millis, retries = 2),
+        Record.retry(delay = 10.millis, retries = 1),
+        Record.retry(delay = 10.millis, retries = 0)),
+      delays = List(
+        10.millis,
+        10.millis,
+        10.millis))
+    actual shouldEqual expected
+  }
+
   test("exponential.jitter.cap") {
     val random = Random.State(12345L)
     val policy = Strategy
