@@ -3,7 +3,7 @@ package com.evolutiongaming.retry
 import cats._
 import cats.arrow.FunctionK
 import cats.effect.{Clock, Timer}
-import cats.implicits._
+import cats.syntax.all._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
 import com.evolutiongaming.retry.Retry.implicits._
