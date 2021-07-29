@@ -2,15 +2,8 @@ import sbt._
 
 object Dependencies {
 
-  val scalatest     = "org.scalatest"       %% "scalatest"   % "3.2.3"
-  val `cats-helper` = "com.evolutiongaming" %% "cats-helper" % "2.1.3"
-  val random        = "com.evolutiongaming" %% "random"      % "0.0.7"
-
-  object Cats {
-    private val version = "2.1.1"
-    val core   = "org.typelevel" %% "cats-core"   % version
-    val kernel = "org.typelevel" %% "cats-kernel" % version
-    val macros = "org.typelevel" %% "cats-macros" % version
-    val effect = "org.typelevel" %% "cats-effect" % "2.5.2"
-  }
+  val scalatest     = "org.scalatest"       %% "scalatest"   % "3.2.9"
+  val `cats-helper` = "com.evolutiongaming" %% "cats-helper" % "2.3.0"
+  val random        = "com.evolutiongaming" %% "random"      % "0.1.1"
+  val `cats-effect` = "org.typelevel"       %% "cats-effect" % "2.5.1"
 }
