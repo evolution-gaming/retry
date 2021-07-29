@@ -8,23 +8,18 @@ homepage := Some(new URL("http://github.com/evolution-gaming/retry"))
 
 startYear := Some(2019)
 
-organizationName := "Evolution Gaming"
+organizationName := "Evolution"
 
-organizationHomepage := Some(url("http://evolutiongaming.com"))
+organizationHomepage := Some(url("http://evolution.com"))
 
-bintrayOrganization := Some("evolutiongaming")
+publishTo := Some(Resolver.evolutionReleases)
 
 scalaVersion := crossScalaVersions.value.head
 
-crossScalaVersions := Seq("2.13.3", "2.12.12")
-
-resolvers += Resolver.bintrayRepo("evolutiongaming", "maven")
+crossScalaVersions := Seq("2.13.6", "2.12.14")
 
 libraryDependencies ++= Seq(
-  Cats.core,
-  Cats.kernel,
-  Cats.macros,
-  Cats.effect,
+  `cats-effect`,
   `cats-helper`,
   random,
   scalatest % Test)
@@ -33,4 +28,6 @@ licenses := Seq(("MIT", url("https://opensource.org/licenses/MIT")))
 
 releaseCrossBuild := true
 
-scalacOptions in(Compile, doc) ++= Seq("-groups", "-implicits", "-no-link-warnings")
+Compile / doc / scalacOptions ++= Seq("-groups", "-implicits", "-no-link-warnings")
+
+ThisBuild / versionScheme := Some("early-semver")
