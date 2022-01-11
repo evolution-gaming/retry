@@ -1,14 +1,12 @@
 package com.evolutiongaming.retry
 
-import java.time.Instant
-
 import cats.arrow.FunctionK
-import cats.effect.{Clock, Timer}
+import cats.effect.{Clock, GenTemporal, Temporal}
+import cats.~>
+import com.evolutiongaming.catshelper.Log
 import cats.implicits._
-import cats.{MonadError, ~>}
-import com.evolutiongaming.catshelper.ClockHelper._
-import com.evolutiongaming.catshelper.{Log, MonadThrowable}
 
+import java.time.Instant
 import scala.concurrent.duration._
 
 trait Retry[F[_]] {
@@ -22,30 +20,31 @@ object Retry {
 
 
   def empty[F[_]]: Retry[F] = new Retry[F] {
-    def apply[A](fa: F[A]) = fa
+    def apply[A](fa: F[A]): F[A] = fa
   }
 
 
-  def apply[F[_] : Timer, E](
+  def apply[F[_], E](
     strategy: Strategy,
-    onError: OnError[F, E])(implicit
-    F: MonadError[F, E]
+    onError: OnError[F, E])(
+    implicit G: GenTemporal[F, E]
   ): Retry[F] = {
 
     type S = (Status, Strategy)
 
     def retry[A](status: Status, strategy: Strategy, error: E): F[Either[S, A]] = {
 
-      def onError1(status: Status, decision: Decision) = {
+      def onError1(status: Status, decision: Decision): F[Unit] = {
         val decision1 = OnError.Decision(decision)
         onError(error, status, decision1)
       }
 
       for {
-        now      <- Clock[F].instant
-        decision  = strategy(status, now)
+        now      <- Clock[F].realTimeInstant
+        decision = strategy(status, now)
         result   <- decision match {
           case Decision.GiveUp =>
+
             for {
               _      <- onError1(status, decision)
               result <- error.raiseError[F, Either[S, A]]
@@ -54,7 +53,7 @@ object Retry {
           case Decision.Retry(delay, status, decide) =>
             for {
               _ <- onError1(status, decision)
-              _ <- Timer[F].sleep(delay)
+              _ <- Temporal[F].sleep(delay)
             } yield {
               (status.plus(delay), decide).asLeft[A]
             }
@@ -64,14 +63,15 @@ object Retry {
 
     new Retry[F] {
 
-      def apply[A](fa: F[A]) = {
+      def apply[A](fa: F[A]): F[A] = {
         for {
-          now    <- Clock[F].instant
+          now    <- Clock[F].realTimeInstant
           zero    = (Status.empty(now), strategy)
           result <- zero.tailRecM[F, A] { case (status, strategy) =>
-            fa.redeemWith[Either[S, A]](
-              a => retry[A](status, strategy, a),
-              a => a.asRight[(Status, Strategy)].pure[F])
+            fa.attempt.flatMap{
+              case Right(a) => a.asRight[(Status, Strategy)].pure[F]
+              case Left(e) =>  retry[A](status, strategy, e)
+            }
           }
         } yield result
       }
@@ -79,9 +79,9 @@ object Retry {
   }
 
 
-  def apply[F[_] : Timer, E](
+  def apply[F[_], E](
     strategy: Strategy)(implicit
-    F: MonadError[F, E]
+    G: GenTemporal[F, E]
   ): Retry[F] = {
     apply(strategy, OnError.empty[F, E])
   }
@@ -120,16 +120,14 @@ object Retry {
       def retry[E](
         strategy: Strategy,
         onError: OnError[F, E])(implicit
-        F: MonadError[F, E],
-        timer: Timer[F]
+        G: GenTemporal[F, E]
       ): F[A] = {
         Retry(strategy, onError).apply(self)
       }
 
       def retry[E](
         strategy: Strategy)(implicit
-        F: MonadError[F, E],
-        timer: Timer[F]
+        G: GenTemporal[F, E]
       ): F[A] = {
         self.retry(strategy, OnError.empty[F, E])
       }
@@ -137,8 +135,7 @@ object Retry {
       def retry(
         strategy: Strategy,
         log: Log[F])(implicit
-        F: MonadThrowable[F],
-        timer: Timer[F]
+        G: GenTemporal[F, Throwable]
       ): F[A] = {
         self.retry(strategy, OnError.fromLog(log))
       }
