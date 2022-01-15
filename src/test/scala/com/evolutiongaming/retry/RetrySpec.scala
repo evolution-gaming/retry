@@ -2,16 +2,13 @@ package com.evolutiongaming.retry
 
 import cats._
 import cats.arrow.FunctionK
-import cats.effect.kernel._
 import cats.implicits._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
 import com.evolutiongaming.retry.Retry.implicits._
+import java.time.Instant
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
-
-import java.time.Instant
-import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 
@@ -136,11 +133,12 @@ class RetrySpec extends AnyFunSuite with Matchers {
   }
 
   test("until") {
+    val untilTime = StateT.InitialTime + 2.milliseconds
     val strategy =
       Strategy
       .const(1.millis)
       .limit(4.millis)
-      .until(Instant.ofEpochMilli(StateT.InitialTime + 2))
+      .until(Instant.ofEpochMilli(untilTime.toMillis))
 
     val call = StateT { _.call }
     val result = Retry(strategy, onError).apply(call)
@@ -307,63 +305,22 @@ object RetrySpec {
 
   object StateT {
 
-    val InitialTime = System.currentTimeMillis()
+    val InitialTime = FiniteDuration(
+      length = Instant.parse("2022-01-15T12:34:56Z").toEpochMilli(),
+      unit = MILLISECONDS
+    )
 
-    implicit val GenTemporalStateT: GenTemporal[StateT, Error] = new GenTemporal[StateT, Error] {
-      override def sleep(time: FiniteDuration): StateT[Error] =
-        StateT { s => (s.sleep(time), ().asRight) }
+    implicit val MonadErrorStateT: MonadError[StateT, Error] = new MonadError[StateT, Error] {
 
-      override def ref[A](a: A): StateT[Ref[StateT, A]] = ??? // there's no Sync for Id
-
-      override def deferred[A]: StateT[Deferred[StateT, A]] = ??? // there's no Sync for Id
-
-      override def unique: StateT[Unique.Token] =
-        StateT { s => (s, new Unique.Token().asRight)}
-
-      override def pure[A](x: A): StateT[A] =
-        StateT { s => (s, x.asRight)}
-
-      override def monotonic: StateT[FiniteDuration] =
-        StateT { s => (s, 0.seconds.asRight)}
-
-      override def realTime: StateT[FiniteDuration] = {
-        StateT { s =>
-          val delay = s.delays.map(_.toMillis).sum
-          (s, FiniteDuration(InitialTime + delay, TimeUnit.MILLISECONDS).asRight)
-        }
-      }
-
-      override def start[A](fa: StateT[A]): StateT[Fiber[StateT, Error, A]] = ??? // can't be expressed with Id
-
-      override def never[A]: StateT[A] = ??? // can't be expressed with Id
-
-      override def cede: StateT[Error] = StateT { s => (s, ().asLeft)}
-
-      override def forceR[A, B](fa: StateT[A])(fb: StateT[B]): StateT[B] = ???
-
-      override def uncancelable[A](body: Poll[StateT] => StateT[A]): StateT[A] = body(new Poll[StateT] {
-        override def apply[X](fa: StateT[X]): StateT[X] = fa
-      })
-
-      override def canceled: StateT[Error] = ???
-
-      override def onCancel[A](fa: StateT[A], fin: StateT[Error]): StateT[A] = fa // can't be expressed with Id
-
-      override def raiseError[A](e: Error): StateT[A] = StateT { s => (s, e.asLeft) }
-
-      override def handleErrorWith[A](fa: StateT[A])(f: Error => StateT[A]): StateT[A] =
-        StateT { s =>
-          val (s1, a) = fa.run(s)
-          a.fold(a => f(a).run(s1), a => (s1, a.asRight))
-        }
-
-      override def flatMap[A, B](fa: StateT[A])(f: A => StateT[B]): StateT[B] =
+      def flatMap[A, B](fa: StateT[A])(f: A => StateT[B]) = {
         StateT[B] { s =>
           val (s1, a) = fa.run(s)
           a.fold(a => (s1, a.asLeft), a => f(a).run(s1))
         }
+      }
 
-      override def tailRecM[A, B](a: A)(f: A => StateT[Either[A, B]]): StateT[B] = {
+      def tailRecM[A, B](a: A)(f: A => StateT[Either[A, B]]) = {
+
         @tailrec
         def apply(s: State, a: A): (State, FE[B]) = {
           val (s1, b) = f(a).run(s)
@@ -376,6 +333,37 @@ object RetrySpec {
 
         StateT { s => apply(s, a) }
       }
+
+      def raiseError[A](e: Error) = {
+        StateT { s => (s, e.asLeft) }
+      }
+
+      def handleErrorWith[A](fa: StateT[A])(f: Error => StateT[A]) = {
+        StateT { s =>
+          val (s1, a) = fa.run(s)
+          a.fold(a => f(a).run(s1), a => (s1, a.asRight))
+        }
+      }
+
+      def pure[A](a: A) = StateT { s => (s, a.asRight) }
+    }
+
+
+    implicit val SleepStateT: Sleep[StateT] = new Sleep[StateT] {
+
+      def applicative = Applicative[StateT]
+
+      def realTime = StateT { s =>
+        val delay = s.delays.fold(0.milliseconds)(_ + _)
+        (s, (InitialTime + delay).asRight)
+      }
+
+      def monotonic = StateT { s => (s, 0.milliseconds.asRight) }
+
+      def sleep(duration: FiniteDuration) = {
+        StateT { s => (s.sleep(duration), ().asRight) }
+      }
+
     }
 
     def apply[A](f: State => (State, FE[A])): StateT[A] = {
