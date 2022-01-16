@@ -1,13 +1,14 @@
 package com.evolutiongaming.retry
 
-import cats.arrow.FunctionK
-import cats.effect.{Clock, GenTemporal, Temporal}
-import cats.implicits._
-import cats.~>
-import com.evolutiongaming.catshelper.ClockHelper._
-import com.evolutiongaming.catshelper.Log
-
 import java.time.Instant
+
+import cats.arrow.FunctionK
+import cats.effect.Clock
+import cats.syntax.all._
+import cats.{MonadError, ~>}
+import com.evolutiongaming.catshelper.ClockHelper._
+import com.evolutiongaming.catshelper.{Log, MonadThrowable}
+
 import scala.concurrent.duration._
 
 trait Retry[F[_]] {
@@ -25,10 +26,10 @@ object Retry {
   }
 
 
-  def apply[F[_], E](
+  def apply[F[_] : Sleep, E](
     strategy: Strategy,
     onError: OnError[F, E])(implicit
-    F: GenTemporal[F, E]
+    F: MonadError[F, E]
   ): Retry[F] = {
 
     type S = (Status, Strategy)
@@ -41,7 +42,7 @@ object Retry {
       }
 
       for {
-        now      <- Clock[F].realTimeInstant
+        now      <- Clock[F].instant
         decision  = strategy(status, now)
         result   <- decision match {
           case Decision.GiveUp =>
@@ -53,7 +54,7 @@ object Retry {
           case Decision.Retry(delay, status, decide) =>
             for {
               _ <- onError1(status, decision)
-              _ <- Temporal[F].sleep(delay)
+              _ <- Sleep[F].sleep(delay)
             } yield {
               (status.plus(delay), decide).asLeft[A]
             }
@@ -78,9 +79,9 @@ object Retry {
   }
 
 
-  def apply[F[_], E](
+  def apply[F[_] : Sleep, E](
     strategy: Strategy)(implicit
-    F: GenTemporal[F, E]
+    F: MonadError[F, E]
   ): Retry[F] = {
     apply(strategy, OnError.empty[F, E])
   }
@@ -119,14 +120,16 @@ object Retry {
       def retry[E](
         strategy: Strategy,
         onError: OnError[F, E])(implicit
-        F: GenTemporal[F, E]
+        F: MonadError[F, E],
+        timer: Sleep[F]
       ): F[A] = {
         Retry(strategy, onError).apply(self)
       }
 
       def retry[E](
         strategy: Strategy)(implicit
-        F: GenTemporal[F, E]
+        F: MonadError[F, E],
+        timer: Sleep[F]
       ): F[A] = {
         self.retry(strategy, OnError.empty[F, E])
       }
@@ -134,7 +137,8 @@ object Retry {
       def retry(
         strategy: Strategy,
         log: Log[F])(implicit
-        F: GenTemporal[F, Throwable]
+        F: MonadThrowable[F],
+        timer: Sleep[F]
       ): F[A] = {
         self.retry(strategy, OnError.fromLog(log))
       }
