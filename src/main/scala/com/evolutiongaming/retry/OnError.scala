@@ -25,13 +25,22 @@ object OnError {
       }
   }
 
+  def fullLogOnRetry[F[_]](log: Log[F]): OnError[F, Throwable] =
+    onRetry(log) { (error, delay) =>
+      log.warn(s"failed, retrying in $delay, error: $error", error)
+    }
 
-  def fromLog[F[_]](log: Log[F]): OnError[F, Throwable] = {
+
+  def fromLog[F[_]](log: Log[F]): OnError[F, Throwable] =
+    onRetry(log) { (error, delay) =>
+      log.warn(s"failed, retrying in $delay, error: $error")
+    }
+
+  private def onRetry[F[_]](log: Log[F])(callback: (Throwable, FiniteDuration) => F[Unit]): OnError[F, Throwable] = {
     (error: Throwable, status: Retry.Status, decision: Decision) => {
-
       decision match {
         case OnError.Decision.Retry(delay) =>
-          log.warn(s"failed, retrying in $delay, error: $error", error)
+          callback(error, delay)
 
         case OnError.Decision.GiveUp =>
           val retries = status.retries
@@ -40,7 +49,6 @@ object OnError {
       }
     }
   }
-
 
   sealed abstract class Decision extends Product
 
