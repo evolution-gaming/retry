@@ -16,7 +16,7 @@ publishTo := Some(Resolver.evolutionReleases)
 
 scalaVersion := crossScalaVersions.value.head
 
-crossScalaVersions := Seq("2.13.6", "2.12.14")
+crossScalaVersions := Seq("2.13.6", "2.12.18")
 
 libraryDependencies ++= Seq(
   `cats-effect`,
