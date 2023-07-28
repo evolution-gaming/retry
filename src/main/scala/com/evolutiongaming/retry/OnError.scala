@@ -31,7 +31,7 @@ object OnError {
 
       decision match {
         case OnError.Decision.Retry(delay) =>
-          log.warn(s"failed, retrying in $delay, error: $error")
+          log.warn(s"failed, retrying in $delay, error: $error", error)
 
         case OnError.Decision.GiveUp =>
           val retries = status.retries
