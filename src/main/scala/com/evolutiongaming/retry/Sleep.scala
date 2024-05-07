@@ -13,7 +13,7 @@ object Sleep {
 
   def apply[F[_]](implicit F: Sleep[F]): Sleep[F] = F
 
-  implicit def fromGenTemporal[F[_]](implicit F: GenTemporal[F, _]): Sleep[F] =
+  implicit def fromGenTemporal[F[_]](implicit F: GenTemporal[F, ?]): Sleep[F] =
     new Sleep[F] {
       def applicative = F.applicative
       def monotonic = F.monotonic
