@@ -4,13 +4,13 @@ name := "retry"
 
 organization := "com.evolutiongaming"
 
-homepage := Some(new URL("http://github.com/evolution-gaming/retry"))
+homepage := Some(url("https://github.com/evolution-gaming/retry"))
 
 startYear := Some(2019)
 
 organizationName := "Evolution"
 
-organizationHomepage := Some(url("http://evolution.com"))
+organizationHomepage := Some(url("https://evolution.com"))
 
 publishTo := Some(Resolver.evolutionReleases)
 
@@ -31,3 +31,7 @@ releaseCrossBuild := true
 Compile / doc / scalacOptions ++= Seq("-groups", "-implicits", "-no-link-warnings")
 
 ThisBuild / versionScheme := Some("early-semver")
+
+//addCommandAlias("check", "all versionPolicyCheck Compile/doc")
+addCommandAlias("check", "show version")
+addCommandAlias("build", "+all compile test")
