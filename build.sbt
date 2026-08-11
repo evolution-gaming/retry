@@ -1,16 +1,17 @@
-import Dependencies._
+import Dependencies.*
+import sbtversionpolicy.Compatibility.BinaryCompatible
 
 name := "retry"
 
 organization := "com.evolutiongaming"
 
-homepage := Some(url("https://github.com/evolution-gaming/retry"))
+homepage := Some(uri("https://github.com/evolution-gaming/retry"))
 
 startYear := Some(2019)
 
 organizationName := "Evolution"
 
-organizationHomepage := Some(url("https://evolution.com"))
+organizationHomepage := Some(uri("https://evolution.com"))
 
 publishTo := Some(Resolver.evolutionReleases)
 
@@ -24,7 +25,7 @@ libraryDependencies ++= Seq(
   random,
   scalatest % Test)
 
-licenses := Seq(("MIT", url("https://opensource.org/licenses/MIT")))
+licenses := Seq(("MIT", uri("https://opensource.org/licenses/MIT")))
 
 Compile / doc / scalacOptions ++= Seq("-groups", "-implicits", "-no-link-warnings")
 
@@ -32,4 +33,6 @@ ThisBuild / versionScheme := Some("early-semver")
 
 //addCommandAlias("check", "all versionPolicyCheck Compile/doc")
 addCommandAlias("check", "show version")
-addCommandAlias("build", "+all compile test")
+ThisBuild / versionPolicyIntention := BinaryCompatible
+
+addCommandAlias("build", "+all compile testFull")
