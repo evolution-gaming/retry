@@ -14,17 +14,15 @@ object Decision {
 
   def giveUp: Decision = GiveUp
 
-
   final case class Retry(delay: FiniteDuration, status: Status, strategy: Strategy) extends Decision
 
   case object GiveUp extends Decision
-
 
   implicit class StrategyDecisionOps(val self: Decision) extends AnyVal {
 
     def flatMap(f: Retry => Decision): Decision = {
       self match {
-        case Decision.GiveUp   => Decision.giveUp
+        case Decision.GiveUp => Decision.giveUp
         case a: Decision.Retry => f(a)
       }
     }

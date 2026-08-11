@@ -14,33 +14,31 @@ trait OnError[F[_], A] {
 
 object OnError {
 
-  def empty[F[_] : Applicative, A]: OnError[F, A] = (_, _, _) => ().pure[F]
+  def empty[F[_]: Applicative, A]: OnError[F, A] = (_, _, _) => ().pure[F]
 
-
-  def apply[F[_] : Applicative](f: Throwable => F[Unit]): OnError[F, Throwable] = {
+  def apply[F[_]: Applicative](f: Throwable => F[Unit]): OnError[F, Throwable] = {
     (error: Throwable, _: Retry.Status, decision: Decision) =>
       decision match {
         case OnError.Decision.Retry(_) => f(error)
-        case OnError.Decision.GiveUp   => ().pure[F]
+        case OnError.Decision.GiveUp => ().pure[F]
       }
   }
-
 
   def fromLog[F[_]](log: Log[F]): OnError[F, Throwable] = {
-    (error: Throwable, status: Retry.Status, decision: Decision) => {
+    (error: Throwable, status: Retry.Status, decision: Decision) =>
+      {
 
-      decision match {
-        case OnError.Decision.Retry(delay) =>
-          log.warn(s"failed, retrying in $delay, error: $error", error)
+        decision match {
+          case OnError.Decision.Retry(delay) =>
+            log.warn(s"failed, retrying in $delay, error: $error", error)
 
-        case OnError.Decision.GiveUp =>
-          val retries = status.retries
-          val duration = status.delay
-          log.error(s"failed after $retries retries within $duration: $error", error)
+          case OnError.Decision.GiveUp =>
+            val retries = status.retries
+            val duration = status.delay
+            log.error(s"failed after $retries retries within $duration: $error", error)
+        }
       }
-    }
   }
-
 
   sealed abstract class Decision extends Product
 
@@ -50,14 +48,12 @@ object OnError {
 
     def giveUp: Decision = GiveUp
 
-
     def apply(decision: StrategyDecision): Decision = {
       decision match {
         case StrategyDecision.Retry(delay, _, _) => Decision.retry(delay)
-        case StrategyDecision.GiveUp             => Decision.giveUp
+        case StrategyDecision.GiveUp => Decision.giveUp
       }
     }
-
 
     final case class Retry(delay: FiniteDuration) extends Decision
 

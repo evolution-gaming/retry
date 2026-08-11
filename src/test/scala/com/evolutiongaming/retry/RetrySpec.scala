@@ -6,9 +6,10 @@ import cats.implicits._
 import com.evolutiongaming.random.Random
 import com.evolutiongaming.retry.Retry._
 import com.evolutiongaming.retry.Retry.implicits._
-import java.time.Instant
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
+
+import java.time.Instant
 import scala.annotation.tailrec
 import scala.concurrent.duration._
 
@@ -37,7 +38,8 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record.retry(delay = 15.millis, retries = 3),
         Record.retry(delay = 10.millis, retries = 2),
         Record.retry(delay = 5.millis, retries = 1),
-        Record.retry(delay = 5.millis, retries = 0)),
+        Record.retry(delay = 5.millis, retries = 0),
+      ),
       delays = List(
         200.millis,
         170.millis,
@@ -48,7 +50,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
         15.millis,
         10.millis,
         5.millis,
-        5.millis))
+        5.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -67,11 +71,14 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record(decision = OnError.Decision.giveUp, retries = 3),
         Record.retry(delay = 10.millis, retries = 2),
         Record.retry(delay = 10.millis, retries = 1),
-        Record.retry(delay = 10.millis, retries = 0)),
+        Record.retry(delay = 10.millis, retries = 0),
+      ),
       delays = List(
         10.millis,
         10.millis,
-        10.millis))
+        10.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -95,7 +102,8 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record.retry(delay = 39600.microseconds, retries = 3),
         Record.retry(delay = 13200.microseconds, retries = 2),
         Record.retry(delay = 7900.microseconds, retries = 1),
-        Record.retry(delay = 0.nanoseconds, retries = 0)),
+        Record.retry(delay = 0.nanoseconds, retries = 0),
+      ),
       delays = List(
         200.millis,
         65600.microseconds,
@@ -103,7 +111,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
         39600.microseconds,
         13200.microseconds,
         7900.microseconds,
-        0.nanoseconds))
+        0.nanoseconds,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -123,12 +133,15 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record.retry(delay = 1.millis, retries = 3),
         Record.retry(delay = 1.millis, retries = 2),
         Record.retry(delay = 1.millis, retries = 1),
-        Record.retry(delay = 1.millis, retries = 0)),
+        Record.retry(delay = 1.millis, retries = 0),
+      ),
       delays = List(
         1.millis,
         1.millis,
         1.millis,
-        1.millis))
+        1.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -136,9 +149,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
     val untilTime = StateT.InitialTime + 2.milliseconds
     val strategy =
       Strategy
-      .const(1.millis)
-      .limit(4.millis)
-      .until(Instant.ofEpochMilli(untilTime.toMillis))
+        .const(1.millis)
+        .limit(4.millis)
+        .until(Instant.ofEpochMilli(untilTime.toMillis))
 
     val call = StateT { _.call }
     val result = Retry(strategy, onError).apply(call)
@@ -150,10 +163,13 @@ class RetrySpec extends AnyFunSuite with Matchers {
       records = List(
         Record(decision = OnError.Decision.giveUp, retries = 2),
         Record.retry(delay = 1.millis, retries = 1),
-        Record.retry(delay = 1.millis, retries = 0)),
+        Record.retry(delay = 1.millis, retries = 0),
+      ),
       delays = List(
         1.millis,
-        1.millis))
+        1.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -171,11 +187,14 @@ class RetrySpec extends AnyFunSuite with Matchers {
       records = List(
         Record.retry(delay = 5.millis, retries = 0),
         Record.retry(delay = 5.millis, retries = 0),
-        Record.retry(delay = 5.millis, retries = 0)),
+        Record.retry(delay = 5.millis, retries = 0),
+      ),
       delays = List(
         5.millis,
         5.millis,
-        5.millis))
+        5.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -193,11 +212,14 @@ class RetrySpec extends AnyFunSuite with Matchers {
       records = List(
         Record.retry(delay = 10.millis, retries = 2),
         Record.retry(delay = 5.millis, retries = 1),
-        Record.retry(delay = 5.millis, retries = 0)),
+        Record.retry(delay = 5.millis, retries = 0),
+      ),
       delays = List(
         10.millis,
         5.millis,
-        5.millis))
+        5.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -214,12 +236,15 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record.retry(delay = 8.millis, retries = 3),
         Record.retry(delay = 4.millis, retries = 2),
         Record.retry(delay = 2.millis, retries = 1),
-        Record.retry(delay = 1.millis, retries = 0)),
+        Record.retry(delay = 1.millis, retries = 0),
+      ),
       delays = List(
         8.millis,
         4.millis,
         2.millis,
-        1.millis))
+        1.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 
@@ -242,7 +267,8 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record.retry(delay = 990.millis, retries = 3),
         Record.retry(delay = 660.millis, retries = 2),
         Record.retry(delay = 790.millis, retries = 1),
-        Record.retry(delay = 0.millis, retries = 0)),
+        Record.retry(delay = 0.millis, retries = 0),
+      ),
       delays = List(
         820.millis,
         410.millis,
@@ -250,10 +276,11 @@ class RetrySpec extends AnyFunSuite with Matchers {
         990.millis,
         660.millis,
         790.millis,
-        0.millis))
+        0.millis,
+      ),
+    )
     actual shouldEqual expected
   }
-
 
   test("jitter half") {
     val random = Random.State(12345L)
@@ -274,7 +301,8 @@ class RetrySpec extends AnyFunSuite with Matchers {
         Record.retry(delay = 995.millis, retries = 3),
         Record.retry(delay = 830.millis, retries = 2),
         Record.retry(delay = 895.millis, retries = 1),
-        Record.retry(delay = 500.millis, retries = 0)),
+        Record.retry(delay = 500.millis, retries = 0),
+      ),
       delays = List(
         910.millis,
         705.millis,
@@ -282,7 +310,9 @@ class RetrySpec extends AnyFunSuite with Matchers {
         995.millis,
         830.millis,
         895.millis,
-        500.millis))
+        500.millis,
+      ),
+    )
     actual shouldEqual expected
   }
 }
@@ -307,7 +337,7 @@ object RetrySpec {
 
     val InitialTime = FiniteDuration(
       length = Instant.parse("2022-01-15T12:34:56Z").toEpochMilli(),
-      unit = MILLISECONDS
+      unit = MILLISECONDS,
     )
 
     implicit val MonadErrorStateT: MonadError[StateT, Error] = new MonadError[StateT, Error] {
@@ -326,8 +356,8 @@ object RetrySpec {
           val (s1, b) = f(a).run(s)
           b match {
             case Right(Right(b)) => (s1, b.asRight)
-            case Right(Left(b))  => apply(s1, b)
-            case Left(b)         => (s1, b.asLeft)
+            case Right(Left(b)) => apply(s1, b)
+            case Left(b) => (s1, b.asLeft)
           }
         }
 
@@ -347,7 +377,6 @@ object RetrySpec {
 
       def pure[A](a: A) = StateT { s => (s, a.asRight) }
     }
-
 
     implicit val SleepStateT: Sleep[StateT] = new Sleep[StateT] {
 
@@ -371,11 +400,10 @@ object RetrySpec {
     }
   }
 
-
   final case class State(
     toRetry: Int = 0,
     records: List[Record] = Nil,
-    delays: List[FiniteDuration] = Nil
+    delays: List[FiniteDuration] = Nil,
   ) { self =>
 
     def sleep(duration: FiniteDuration): State = {
@@ -390,7 +418,6 @@ object RetrySpec {
       }
     }
   }
-
 
   final case class Record(decision: OnError.Decision, retries: Int)
 

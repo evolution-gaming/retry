@@ -1,7 +1,5 @@
 package com.evolutiongaming.retry
 
-import java.time.Instant
-
 import cats.arrow.FunctionK
 import cats.effect.Clock
 import cats.syntax.all._
@@ -9,6 +7,7 @@ import cats.{MonadError, ~>}
 import com.evolutiongaming.catshelper.ClockHelper._
 import com.evolutiongaming.catshelper.{Log, MonadThrowable}
 
+import java.time.Instant
 import scala.concurrent.duration._
 
 trait Retry[F[_]] {
@@ -18,18 +17,20 @@ trait Retry[F[_]] {
 
 object Retry {
 
-  def apply[F[_]](implicit F: Retry[F]): Retry[F] = F
-
+  def apply[F[_]](
+    implicit
+    F: Retry[F],
+  ): Retry[F] = F
 
   def empty[F[_]]: Retry[F] = new Retry[F] {
     def apply[A](fa: F[A]) = fa
   }
 
-
-  def apply[F[_] : Sleep, E](
+  def apply[F[_]: Sleep, E](
     strategy: Strategy,
-    onError: OnError[F, E])(implicit
-    F: MonadError[F, E]
+    onError: OnError[F, E],
+  )(implicit
+    F: MonadError[F, E],
   ): Retry[F] = {
 
     type S = (Status, Strategy)
@@ -42,12 +43,12 @@ object Retry {
       }
 
       for {
-        now      <- Clock[F].instant
-        decision  = strategy(status, now)
-        result   <- decision match {
+        now <- Clock[F].instant
+        decision = strategy(status, now)
+        result <- decision match {
           case Decision.GiveUp =>
             for {
-              _      <- onError1(status, decision)
+              _ <- onError1(status, decision)
               result <- error.raiseError[F, Either[S, A]]
             } yield result
 
@@ -66,26 +67,26 @@ object Retry {
 
       def apply[A](fa: F[A]) = {
         for {
-          now    <- Clock[F].instant
-          zero    = (Status.empty(now), strategy)
+          now <- Clock[F].instant
+          zero = (Status.empty(now), strategy)
           result <- zero.tailRecM[F, A] { case (status, strategy) =>
             fa.redeemWith[Either[S, A]](
               a => retry[A](status, strategy, a),
-              a => a.asRight[(Status, Strategy)].pure[F])
+              a => a.asRight[(Status, Strategy)].pure[F],
+            )
           }
         } yield result
       }
     }
   }
 
-
-  def apply[F[_] : Sleep, E](
-    strategy: Strategy)(implicit
-    F: MonadError[F, E]
+  def apply[F[_]: Sleep, E](
+    strategy: Strategy,
+  )(implicit
+    F: MonadError[F, E],
   ): Retry[F] = {
     apply(strategy, OnError.empty[F, E])
   }
-
 
   implicit class RetryOps[F[_]](val self: Retry[F]) extends AnyVal {
 
@@ -98,7 +99,6 @@ object Retry {
     }
   }
 
-
   final case class Status(retries: Int, delay: FiniteDuration, last: Instant) { self =>
 
     def plus(delay: FiniteDuration): Status = {
@@ -110,40 +110,43 @@ object Retry {
     def empty(last: Instant): Status = Status(0, Duration.Zero, last)
   }
 
-
   object implicits {
 
     implicit class OpsRetry[F[_], A](val self: F[A]) extends AnyVal {
 
-      def retry(implicit retry: Retry[F]): F[A] = retry(self)
+      def retry(
+        implicit
+        retry: Retry[F],
+      ): F[A] = retry(self)
 
       def retry[E](
         strategy: Strategy,
-        onError: OnError[F, E])(implicit
+        onError: OnError[F, E],
+      )(implicit
         F: MonadError[F, E],
-        timer: Sleep[F]
+        timer: Sleep[F],
       ): F[A] = {
         Retry(strategy, onError).apply(self)
       }
 
       def retry[E](
-        strategy: Strategy)(implicit
+        strategy: Strategy,
+      )(implicit
         F: MonadError[F, E],
-        timer: Sleep[F]
+        timer: Sleep[F],
       ): F[A] = {
         self.retry(strategy, OnError.empty[F, E])
       }
 
       def retry(
         strategy: Strategy,
-        log: Log[F])(implicit
+        log: Log[F],
+      )(implicit
         F: MonadThrowable[F],
-        timer: Sleep[F]
+        timer: Sleep[F],
       ): F[A] = {
         self.retry(strategy, OnError.fromLog(log))
       }
     }
   }
 }
-
-

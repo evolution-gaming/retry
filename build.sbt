@@ -23,7 +23,8 @@ libraryDependencies ++= Seq(
   `cats-effect`,
   `cats-helper`,
   random,
-  scalatest % Test)
+  scalatest % Test,
+)
 
 licenses := Seq(("MIT", uri("https://opensource.org/licenses/MIT")))
 
@@ -31,8 +32,8 @@ Compile / doc / scalacOptions ++= Seq("-groups", "-implicits", "-no-link-warning
 
 ThisBuild / versionScheme := Some("early-semver")
 
-//addCommandAlias("check", "all versionPolicyCheck Compile/doc")
-addCommandAlias("check", "show version")
 ThisBuild / versionPolicyIntention := BinaryCompatible
 
+addCommandAlias("check", "show versionPolicyCheck scalafmtCheckRepo Compile/doc")
+addCommandAlias("fmt", "scalafmtRepo")
 addCommandAlias("build", "+all compile testFull")
